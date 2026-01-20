@@ -4,9 +4,7 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from PIL import Image, ImageDraw, ImageFont
-import io
 from playwright.async_api import async_playwright
-import re
 
 # Configuración
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -28,6 +26,7 @@ async def scrape_productos():
             page = await browser.new_page()
             await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=30000)
             await page.wait_for_timeout(3000)
+
             productos = await page.evaluate("""() => {
                 const items = [];
                 const productCards = document.querySelectorAll('.product, .producto, [class*="product"], [class*="card"], .item');
@@ -43,15 +42,20 @@ async def scrape_productos():
                 });
                 return items;
             }""")
+
             await browser.close()
-            productos_cache = {str(i+1): {
-                "nombre": prod['nombre'][:50],
-                "precio_antes": prod['precios'][0] if len(prod['precios'])>1 else "",
-                "precio_ahora": prod['precios'][-1] if prod['precios'] else "",
-                "descuento": "NUEVO",
-                "descripcion": prod.get('descripcion','')[:100],
-                "imagen_url": prod.get('imagen','')
-            } for i,prod in enumerate(productos[:10])}
+
+            productos_cache = {
+                str(i+1): {
+                    "nombre": prod['nombre'][:50],
+                    "precio_antes": prod['precios'][0] if len(prod['precios']) > 1 else "",
+                    "precio_ahora": prod['precios'][-1] if prod['precios'] else "",
+                    "descuento": "NUEVO",
+                    "descripcion": prod.get('descripcion','')[:100],
+                    "imagen_url": prod.get('imagen','')
+                }
+                for i, prod in enumerate(productos[:10])
+            }
             ultima_actualizacion = datetime.now()
             print(f"✅ {len(productos_cache)} productos cargados")
     except Exception as e:
@@ -76,8 +80,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"✅ Productos actualizados: {len(productos_cache)}")
     elif query.data == 'ver_productos':
         texto = "📦 Productos:\n\n"
-        for id, prod in productos_cache.items():
-            texto += f"{id}. {prod['nombre']} - {prod['precio_ahora']}\n"
+        for i, prod in enumerate(productos_cache.values(), start=1):
+            texto += f"{i}. {prod['nombre']} - {prod['precio_ahora']}\n"
         await query.edit_message_text(texto)
 
 # -------------------------------
@@ -92,11 +96,14 @@ async def iniciar_scraping_inicial():
 # -------------------------------
 async def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
+
     asyncio.create_task(iniciar_scraping_inicial())
+
     print("🤖 Bot iniciado...")
-    await app.run_polling(allowed_updates=Update.ALL_TYPES)
+    await app.run_polling(allowed_updates=Update.ALL_TYPES)  # 👈 ahora con await
 
 if __name__ == "__main__":
     asyncio.run(main())
