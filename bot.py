@@ -23,29 +23,96 @@ async def scrape_productos():
     global productos_cache, ultima_actualizacion
     
     try:
-        print("Iniciando scraping de nexushcr.com...")
+        print("Iniciando scraping de nexushcr.com (SPA React)...")
         
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
+        # Paso 1: Descargar el HTML principal
         response = requests.get(WEBSITE_URL, headers=headers, timeout=20)
         response.raise_for_status()
+        print(f"HTML principal descargado ({len(response.text)} caracteres)")
         
-        print(f"HTML descargado ({len(response.text)} caracteres)")
+        # Paso 2: Buscar el archivo JavaScript principal
+        patron_js = r'src="(/assets/index-[^"]+\.js)"'
+        match_js = re.search(patron_js, response.text)
         
+        if not match_js:
+            print("No se encontro el archivo JavaScript principal")
+            return
+        
+        js_path = match_js.group(1)
+        js_url = WEBSITE_URL + js_path
+        print(f"Archivo JS encontrado: {js_path}")
+        
+        # Paso 3: Descargar el archivo JavaScript
+        response_js = requests.get(js_url, headers=headers, timeout=20)
+        response_js.raise_for_status()
+        print(f"JavaScript descargado ({len(response_js.text)} caracteres)")
+        
+        # Paso 4: Buscar el objeto products en el JS
         productos_encontrados = []
         
-        patron_products_1 = r'const products\s*=\s*(\{[\s\S]*?\});'
-        match = re.search(patron_products_1, response.text)
+        # Buscar patrones del objeto products
+        patron_products = r'const products\s*=\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}'
+        match = re.search(patron_products, response_js.text)
         
         if not match:
-            patron_products_2 = r'var products\s*=\s*(\{[\s\S]*?\});'
-            match = re.search(patron_products_2, response.text)
+            patron_products = r'products\s*[:=]\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}'
+            match = re.search(patron_products, response_js.text)
         
-        if not match:
-            patron_products_3 = r'let products\s*=\s*(\{[\s\S]*?\});'
-            match = re.search(patron_products_3, response.text)
+        if match:
+            productos_js = match.group(0)
+            print("Encontrado objeto products en JavaScript")
+            
+            # Extraer productos con regex
+            patron_producto = r'\{\s*id:\s*(\d+)\s*,\s*name:\s*["\']([^"\']+)["\']\s*,\s*price:\s*(\d+)\s*,\s*image:\s*["\']([^"\']+)["\']\s*,\s*category:\s*["\']([^"\']+)["\']\s*,\s*description:\s*["\']([^"\']*)["\']\s*\}'
+            
+            matches = list(re.finditer(patron_producto, productos_js))
+            print(f"Encontrados {len(matches)} productos")
+            
+            for match_prod in matches:
+                prod_id, nombre, precio, imagen, categoria, descripcion = match_prod.groups()
+                
+                if imagen.startswith('/'):
+                    imagen_url = WEBSITE_URL + imagen
+                elif imagen.startswith('http'):
+                    imagen_url = imagen
+                else:
+                    imagen_url = WEBSITE_URL + '/' + imagen
+                
+                productos_encontrados.append({
+                    'id': int(prod_id),
+                    'nombre': nombre.strip(),
+                    'precio': int(precio),
+                    'imagen_url': imagen_url,
+                    'categoria': categoria.strip(),
+                    'descripcion': descripcion.strip()
+                })
+            
+            if productos_encontrados:
+                productos_cache = productos_encontrados
+                ultima_actualizacion = datetime.now()
+                print(f"{len(productos_cache)} productos cargados correctamente")
+                
+                categorias = {}
+                for p in productos_cache:
+                    cat = p['categoria']
+                    categorias[cat] = categorias.get(cat, 0) + 1
+                
+                print("Productos por categoria:")
+                for cat, count in categorias.items():
+                    print(f"   {cat}: {count}")
+            else:
+                print("No se encontraron productos en el JavaScript")
+        else:
+            print("No se encontro el objeto products en el JavaScript")
+            # Buscar cualquier ocurrencia de 'products'
+            if 'products' in response_js.text:
+                idx = response_js.text.find('products')
+                print(f"La palabra 'products' existe. Contexto:")
+                print(response_js.text[max(0, idx-100):min(len(response_js.text), idx+300)])
         
         if match:
             productos_js = match.group(1)
