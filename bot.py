@@ -3,7 +3,6 @@ import asyncio
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from PIL import Image, ImageDraw, ImageFont
 from playwright.async_api import async_playwright
 
 # Configuración
@@ -11,7 +10,6 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
 WEBSITE_URL = "https://nexushcr.com"
 
-# Cache de productos
 productos_cache = {}
 ultima_actualizacion = None
 
@@ -87,23 +85,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # -------------------------------
 # Scraping inicial
 # -------------------------------
-async def iniciar_scraping_inicial():
+async def iniciar_scraping_inicial(app: Application):
     await asyncio.sleep(5)
     await scrape_productos()
 
 # -------------------------------
 # Main
 # -------------------------------
-async def main():
+def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    asyncio.create_task(iniciar_scraping_inicial())
+    # Hook para lanzar scraping inicial al arrancar
+    app.post_init = iniciar_scraping_inicial
 
     print("🤖 Bot iniciado...")
-    await app.run_polling(allowed_updates=Update.ALL_TYPES)  # 👈 ahora con await
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
