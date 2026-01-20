@@ -26,26 +26,25 @@ async def scrape_productos():
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=30000)
-            await page.wait_for_timeout(3000)
+
+            # Esperar hasta que el objeto products esté definido
+            await page.wait_for_function("() => typeof products !== 'undefined'", timeout=15000)
 
             productos = await page.evaluate("""() => {
-                if (typeof products !== 'undefined') {
-                    const items = [];
-                    for (const categoria in products) {
-                        products[categoria].forEach(prod => {
-                            items.push({
-                                id: prod.id,
-                                nombre: prod.name,
-                                precio: prod.price,
-                                imagen: prod.image,
-                                descripcion: prod.description,
-                                categoria: prod.category
-                            });
+                const items = [];
+                for (const categoria in products) {
+                    products[categoria].forEach(prod => {
+                        items.push({
+                            id: prod.id,
+                            nombre: prod.name,
+                            precio: prod.price,
+                            imagen: prod.image,
+                            descripcion: prod.description,
+                            categoria: prod.category
                         });
-                    }
-                    return items;
+                    });
                 }
-                return [];
+                return items;
             }""")
 
             await browser.close()
@@ -53,7 +52,9 @@ async def scrape_productos():
             productos_cache = {
                 str(i+1): {
                     "nombre": prod['nombre'][:50],
+                    "precio_antes": "",
                     "precio_ahora": f"₡{prod['precio']:,}",
+                    "descuento": "NUEVO",
                     "descripcion": prod.get('descripcion','')[:100],
                     "imagen_url": prod.get('imagen',''),
                     "categoria": prod.get('categoria','')
@@ -64,6 +65,7 @@ async def scrape_productos():
             print(f"✅ {len(productos_cache)} productos cargados")
     except Exception as e:
         print(f"❌ Error scraping: {e}")
+
 
 # -------------------------------
 # Generar imagen promocional
