@@ -38,26 +38,48 @@ async def scrape_productos():
         response = requests.get(WEBSITE_URL, headers=headers, timeout=20)
         response.raise_for_status()
         
-        # Buscar el objeto products en el código JavaScript
-        patron_products = r'const products = ({[\s\S]*?});'
-        match = re.search(patron_products, response.text)
+        print(f"📄 Código HTML descargado ({len(response.text)} caracteres)")
+        
+        # Buscar el objeto products en el código JavaScript - Versión mejorada
+        # Intentar múltiples patrones
+        productos_encontrados = []
+        
+        # Patrón 1: const products = {...}
+        patron_products_1 = r'const products\s*=\s*(\{[\s\S]*?\});'
+        match = re.search(patron_products_1, response.text)
+        
+        if not match:
+            # Patrón 2: var products = {...}
+            patron_products_2 = r'var products\s*=\s*(\{[\s\S]*?\});'
+            match = re.search(patron_products_2, response.text)
+        
+        if not match:
+            # Patrón 3: let products = {...}
+            patron_products_3 = r'let products\s*=\s*(\{[\s\S]*?\});'
+            match = re.search(patron_products_3, response.text)
         
         if match:
             productos_js = match.group(1)
             print("✅ Encontrado objeto products en el código")
+            print(f"📦 Extrayendo datos ({len(productos_js)} caracteres)...")
             
-            # Extraer todos los productos usando regex
-            patron_producto = r'\{\s*id:\s*(\d+),\s*name:\s*[\'"]([^\'"]+)[\'"]\s*,\s*price:\s*(\d+)\s*,\s*image:\s*[\'"]([^\'"]+)[\'"]\s*,\s*category:\s*[\'"]([^\'"]+)[\'"]\s*,\s*description:\s*[\'"]([^\'"]*)[\'"]'
+            # Extraer todos los productos usando regex mejorado
+            # Patrón más flexible que acepta espacios y saltos de línea
+            patron_producto = r'\{\s*id:\s*(\d+)\s*,\s*name:\s*[\'"]([^\'"]+)[\'"]\s*,\s*price:\s*(\d+)\s*,\s*image:\s*[\'"]([^\'"]+)[\'"]\s*,\s*category:\s*[\'"]([^\'"]+)[\'"]\s*,\s*description:\s*[\'"]([^\'"]*)[\'"]'
             
-            productos_encontrados = []
-            for match in re.finditer(patron_producto, productos_js):
-                prod_id, nombre, precio, imagen, categoria, descripcion = match.groups()
+            matches = list(re.finditer(patron_producto, productos_js))
+            print(f"🔎 Encontrados {len(matches)} productos con regex")
+            
+            for match_prod in matches:
+                prod_id, nombre, precio, imagen, categoria, descripcion = match_prod.groups()
                 
                 # Construir URL completa de la imagen
                 if imagen.startswith('/'):
                     imagen_url = WEBSITE_URL + imagen
-                else:
+                elif imagen.startswith('http'):
                     imagen_url = imagen
+                else:
+                    imagen_url = WEBSITE_URL + '/' + imagen
                 
                 productos_encontrados.append({
                     'id': int(prod_id),
@@ -83,9 +105,20 @@ async def scrape_productos():
                 for cat, count in categorias.items():
                     print(f"   • {cat}: {count}")
             else:
-                print("⚠️ No se encontraron productos en el código")
+                print("⚠️ No se encontraron productos con el patrón regex")
+                # Mostrar muestra del código para debug
+                print("📝 Muestra del código JavaScript encontrado:")
+                print(productos_js[:500])
         else:
             print("❌ No se encontró el objeto products en la página")
+            # Buscar si existe la palabra 'products' en el código
+            if 'products' in response.text:
+                print("⚠️ La palabra 'products' existe pero no coincide con los patrones")
+                # Mostrar contexto
+                idx = response.text.find('products')
+                print(f"📝 Contexto: {response.text[max(0, idx-100):idx+200]}")
+            else:
+                print("❌ La palabra 'products' no existe en el HTML")
             
     except Exception as e:
         print(f"❌ Error en scraping: {e}")
