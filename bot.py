@@ -95,6 +95,7 @@ def crear_imagen_producto(prod):
 # Handlers de Telegram
 # -------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("📩 Recibí /start")
     await update.message.reply_text("Hola 👋, el bot está vivo")
     if productos_cache:
         await update.message.reply_text(f"Productos cargados: {len(productos_cache)}")
