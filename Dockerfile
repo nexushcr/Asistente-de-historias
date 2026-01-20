@@ -1,20 +1,29 @@
-# Usa la imagen oficial de Playwright para Python
-FROM mcr.microsoft.com/playwright/python:v1.40.0-focal
+# Imagen base de Python 3.11 slim (más ligera y rápida)
+FROM python:3.11-slim
 
-# Establece el directorio de trabajo
+# Establecer directorio de trabajo
 WORKDIR /app
 
-# Copia los archivos del proyecto
+# Instalar dependencias del sistema necesarias para PIL/Pillow
+RUN apt-get update && apt-get install -y \
+    libjpeg-dev \
+    zlib1g-dev \
+    libfreetype6-dev \
+    liblcms2-dev \
+    libopenjp2-7-dev \
+    libtiff-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar archivos de requerimientos primero (para aprovechar cache de Docker)
+COPY requirements.txt .
+
+# Instalar dependencias de Python
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copiar el resto de archivos del proyecto
 COPY . .
-
-# Instala las dependencias de Python
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Instala las dependencias de sistema necesarias para Playwright
-RUN playwright install-deps
-
-# Instala los navegadores de Playwright
-RUN playwright install
 
 # Comando de inicio
 CMD ["python", "bot.py"]
+
