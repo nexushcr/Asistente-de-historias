@@ -139,83 +139,149 @@ async def scrape_productos():
 
 
 def crear_imagen_producto(prod):
+    # Canvas 1080x1080 para Instagram
     canvas = Image.new("RGB", (1080, 1080), "#ffffff")
     draw = ImageDraw.Draw(canvas)
     
-    color_primario = (26, 115, 232)
-    color_acento = (52, 168, 83)
+    # Paleta de colores vibrantes moderna
+    colores_fondo = [
+        [(255, 93, 177), (155, 81, 224)],  # Rosa a Morado
+        [(67, 233, 123), (56, 249, 215)],  # Verde a Cyan
+        [(251, 200, 212), (151, 149, 240)], # Rosa claro a Morado claro
+        [(255, 159, 64), (255, 99, 132)],  # Naranja a Rosa
+        [(54, 209, 220), (91, 134, 229)]   # Cyan a Azul
+    ]
     
-    for i in range(1080):
-        intensity = int(248 - (i / 1080) * 15)
-        draw.rectangle([(0, i), (1080, i+1)], fill=(intensity, intensity, 255))
+    # Seleccionar degradado basado en categoría
+    color_idx = hash(prod['categoria']) % len(colores_fondo)
+    color1, color2 = colores_fondo[color_idx]
     
-    draw.rectangle([(0, 0), (1080, 120)], fill=color_primario)
+    # Crear degradado diagonal vibrante
+    for y in range(1080):
+        ratio = y / 1080
+        r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
+        g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
+        b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
+        draw.rectangle([(0, y), (1080, y+1)], fill=(r, g, b))
     
+    # Overlay semi-transparente para suavizar
+    overlay = Image.new("RGBA", (1080, 1080), (255, 255, 255, 30))
+    canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
+    draw = ImageDraw.Draw(canvas)
+    
+    # Badge "OFERTA ESPECIAL" o "NUEVO" en esquina superior
+    badge_text = "OFERTA ESPECIAL"
     try:
-        font_logo = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 55)
+        font_badge = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32)
+        font_logo = ImageFont.truetype("/System/Library/Fonts/Helvetica-Bold.ttc", 65)
+        font_nombre = ImageFont.truetype("/System/Library/Fonts/Helvetica-Bold.ttc", 42)
+        font_precio_grande = ImageFont.truetype("/System/Library/Fonts/Helvetica-Bold.ttc", 95)
+        font_precio_label = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 35)
+        font_cta = ImageFont.truetype("/System/Library/Fonts/Helvetica-Bold.ttc", 38)
     except:
         try:
-            font_logo = ImageFont.truetype("arial.ttf", 55)
+            font_badge = ImageFont.truetype("arial.ttf", 32)
+            font_logo = ImageFont.truetype("arialbd.ttf", 65)
+            font_nombre = ImageFont.truetype("arialbd.ttf", 42)
+            font_precio_grande = ImageFont.truetype("arialbd.ttf", 95)
+            font_precio_label = ImageFont.truetype("arial.ttf", 35)
+            font_cta = ImageFont.truetype("arialbd.ttf", 38)
         except:
+            font_badge = ImageFont.load_default()
             font_logo = ImageFont.load_default()
+            font_nombre = ImageFont.load_default()
+            font_precio_grande = ImageFont.load_default()
+            font_precio_label = ImageFont.load_default()
+            font_cta = ImageFont.load_default()
     
-    draw.text((540, 60), "NEXUS HCR", font=font_logo, fill="white", anchor="mm")
+    # Badge rotado en esquina
+    draw.polygon([(0, 0), (280, 0), (0, 280)], fill=(255, 215, 0))
+    draw.polygon([(0, 0), (260, 0), (0, 260)], fill=(255, 193, 7))
     
+    # Texto del badge (rotado 45 grados visualmente con posición)
+    draw.text((70, 35), "OFERTA", font=font_badge, fill=(139, 0, 0), anchor="mm")
+    
+    # Logo NEXUS HCR en la parte superior
+    draw.text((540, 80), "NEXUS HCR", font=font_logo, fill="white", anchor="mm", 
+              stroke_width=3, stroke_fill=(0, 0, 0))
+    
+    # Contenedor blanco con sombra para el producto
+    shadow_offset = 15
+    draw.rounded_rectangle(
+        [(140 + shadow_offset, 180 + shadow_offset), (940 + shadow_offset, 680 + shadow_offset)],
+        radius=30,
+        fill=(0, 0, 0, 50)
+    )
+    
+    draw.rounded_rectangle(
+        [(140, 180), (940, 680)],
+        radius=30,
+        fill="white"
+    )
+    
+    # Descargar y pegar imagen del producto
     try:
         response = requests.get(prod["imagen_url"], timeout=15)
         img_producto = Image.open(BytesIO(response.content)).convert("RGBA")
-        img_producto.thumbnail((700, 700), Image.Resampling.LANCZOS)
+        img_producto.thumbnail((650, 450), Image.Resampling.LANCZOS)
         
-        bg_white = Image.new("RGBA", (750, 750), "white")
-        offset = ((750 - img_producto.width) // 2, (750 - img_producto.height) // 2)
-        bg_white.paste(img_producto, offset, img_producto if img_producto.mode == 'RGBA' else None)
-        canvas.paste(bg_white, (165, 150), bg_white)
+        offset_x = 540 - img_producto.width // 2
+        offset_y = 430 - img_producto.height // 2
+        
+        canvas_rgba = canvas.convert("RGBA")
+        canvas_rgba.paste(img_producto, (offset_x, offset_y), img_producto if img_producto.mode == 'RGBA' else None)
+        canvas = canvas_rgba.convert("RGB")
+        draw = ImageDraw.Draw(canvas)
         
     except Exception as e:
-        print(f"Error cargando imagen {prod['imagen_url']}: {e}")
-        draw.rectangle([(165, 150), (915, 900)], fill="#f0f0f0", outline="#cccccc", width=3)
-        try:
-            font_placeholder = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 80)
-        except:
-            try:
-                font_placeholder = ImageFont.truetype("arial.ttf", 80)
-            except:
-                font_placeholder = ImageFont.load_default()
-        draw.text((540, 525), "Producto", font=font_placeholder, fill="#999999", anchor="mm")
+        print(f"Error cargando imagen: {e}")
+        draw.text((540, 430), "🖼️", font=font_logo, fill="#cccccc", anchor="mm")
     
-    try:
-        font_nombre = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 38)
-        font_precio = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 70)
-        font_categoria = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 28)
-    except:
-        try:
-            font_nombre = ImageFont.truetype("arial.ttf", 38)
-            font_precio = ImageFont.truetype("arial.ttf", 70)
-            font_categoria = ImageFont.truetype("arial.ttf", 28)
-        except:
-            font_nombre = ImageFont.load_default()
-            font_precio = ImageFont.load_default()
-            font_categoria = ImageFont.load_default()
-    
-    draw.rectangle([(0, 920), (1080, 1080)], fill="#1a1a1a")
-    
-    categoria_text = prod['categoria'].upper()
-    draw.rounded_rectangle([(40, 935), (260, 975)], radius=10, fill=color_acento)
-    draw.text((150, 955), categoria_text, font=font_categoria, fill="white", anchor="mm")
-    
-    nombre = prod['nombre'][:35]
-    draw.text((540, 1000), nombre, font=font_nombre, fill="white", anchor="mm")
-    
-    precio_text = f"C{prod['precio']:,}"
-    
-    bbox = draw.textbbox((0, 0), precio_text, font=font_precio)
-    precio_width = bbox[2] - bbox[0]
+    # Sección inferior con información
     draw.rounded_rectangle(
-        [(540 - precio_width//2 - 30, 1025), (540 + precio_width//2 + 30, 1075)],
-        radius=15,
-        fill=color_acento
+        [(40, 720), (1040, 1040)],
+        radius=25,
+        fill=(255, 255, 255, 250)
     )
-    draw.text((540, 1050), precio_text, font=font_precio, fill="white", anchor="mm")
+    
+    # Nombre del producto con wrap si es muy largo
+    nombre = prod['nombre']
+    if len(nombre) > 40:
+        palabras = nombre.split()
+        linea1 = ""
+        linea2 = ""
+        for palabra in palabras:
+            if len(linea1 + palabra) < 35:
+                linea1 += palabra + " "
+            else:
+                linea2 += palabra + " "
+        draw.text((540, 760), linea1.strip(), font=font_nombre, fill=(30, 30, 30), anchor="mm")
+        draw.text((540, 810), linea2.strip(), font=font_nombre, fill=(30, 30, 30), anchor="mm")
+    else:
+        draw.text((540, 780), nombre, font=font_nombre, fill=(30, 30, 30), anchor="mm")
+    
+    # Precio destacado con círculo de fondo
+    precio_y = 870 if len(nombre) > 40 else 850
+    draw.ellipse([(340, precio_y - 60), (740, precio_y + 60)], fill=(255, 193, 7))
+    draw.ellipse([(350, precio_y - 50), (730, precio_y + 50)], fill=(255, 215, 0))
+    
+    draw.text((540, precio_y - 25), "SOLO", font=font_precio_label, fill=(139, 0, 0), anchor="mm")
+    precio_text = f"₡{prod['precio']:,}"
+    draw.text((540, precio_y + 20), precio_text, font=font_precio_grande, fill=(139, 0, 0), anchor="mm")
+    
+    # Call to action en la parte inferior
+    cta_y = 980
+    draw.text((540, cta_y), "¡COMPRA AHORA!", font=font_cta, fill=(255, 0, 80), anchor="mm",
+              stroke_width=2, stroke_fill="white")
+    
+    # Categoría badge pequeño
+    cat_badge_width = 180
+    draw.rounded_rectangle(
+        [(540 - cat_badge_width//2, 1020), (540 + cat_badge_width//2, 1060)],
+        radius=20,
+        fill=(100, 100, 100)
+    )
+    draw.text((540, 1040), prod['categoria'].upper(), font=font_badge, fill="white", anchor="mm")
     
     return canvas
 
