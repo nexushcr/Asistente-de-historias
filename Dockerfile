@@ -1,29 +1,34 @@
-# Imagen base de Python 3.11 slim (más ligera y rápida)
 FROM python:3.11-slim
 
-# Establecer directorio de trabajo
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias para PIL/Pillow
-RUN apt-get update && apt-get install -y \
-    libjpeg-dev \
-    zlib1g-dev \
-    libfreetype6-dev \
-    liblcms2-dev \
-    libopenjp2-7-dev \
-    libtiff-dev \
+# Dependencias del sistema necesarias para Pillow, rembg y (opcional) Real-ESRGAN
+RUN apt-get update && apt-get install -y \ 
+    libjpeg-dev \ 
+    zlib1g-dev \ 
+    libfreetype6-dev \ 
+    liblcms2-dev \ 
+    libopenjp2-7-dev \ 
+    libtiff-dev \ 
+    fontconfig \ 
+    ffmpeg \ 
+    libgl1-mesa-glx \ 
+    libglib2.0-0 \ 
+    build-essential \ 
+    git \ 
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar archivos de requerimientos primero (para aprovechar cache de Docker)
+# Copiar requirements e instalar dependencias de Python
 COPY requirements.txt .
 
-# Instalar dependencias de Python
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir --upgrade pip && \ 
     pip install --no-cache-dir -r requirements.txt
 
-# Copiar el resto de archivos del proyecto
+# Copiar fuentes (asegúrate de añadir fonts/ al repo)
+COPY fonts /usr/share/fonts/truetype/custom
+RUN fc-cache -f -v || true
+
+# Copiar el resto del código
 COPY . .
 
-# Comando de inicio
 CMD ["python", "bot.py"]
-
