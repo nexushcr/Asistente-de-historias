@@ -1,3 +1,7 @@
+"""
+(Full file content below)
+"""
+
 import os
 import asyncio
 import random
@@ -12,12 +16,15 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from image_utils import crear_imagen_producto
+
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBSITE_URL = os.getenv("WEBSITE_URL", "https://www.nexushcr.com")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "")
 
 productos_cache = []
 ultima_actualizacion = None
+
 
 async def scrape_productos():
     global productos_cache, ultima_actualizacion
@@ -48,7 +55,7 @@ async def scrape_productos():
         for prod in productos_json:
             imagen = prod.get('imagen', '')
             
-            if imagen.startswith('/'):
+            if imagen.startswith('/'):  
                 imagen_url = WEBSITE_URL + imagen
             elif imagen.startswith('http'):
                 imagen_url = imagen
@@ -68,7 +75,7 @@ async def scrape_productos():
         ultima_actualizacion = datetime.now()
         print(f"{len(productos_cache)} productos cargados correctamente")
         
-        categorias = {}
+        categorias = {} 
         for p in productos_cache:
             cat = p['categoria']
             categorias[cat] = categorias.get(cat, 0) + 1
@@ -77,213 +84,18 @@ async def scrape_productos():
         for cat, count in categorias.items():
             print(f"   {cat}: {count}")
         
-        if match:
-            productos_js = match.group(1)
-            print("Encontrado objeto products en el codigo")
-            print(f"Extrayendo datos ({len(productos_js)} caracteres)...")
-            
-            patron_producto = r'\{\s*id:\s*(\d+)\s*,\s*name:\s*[\'"]([^\'"]+)[\'"]\s*,\s*price:\s*(\d+)\s*,\s*image:\s*[\'"]([^\'"]+)[\'"]\s*,\s*category:\s*[\'"]([^\'"]+)[\'"]\s*,\s*description:\s*[\'"]([^\'"]*)[\'"]'
-            
-            matches = list(re.finditer(patron_producto, productos_js))
-            print(f"Encontrados {len(matches)} productos con regex")
-            
-            for match_prod in matches:
-                prod_id, nombre, precio, imagen, categoria, descripcion = match_prod.groups()
-                
-                if imagen.startswith('/'):
-                    imagen_url = WEBSITE_URL + imagen
-                elif imagen.startswith('http'):
-                    imagen_url = imagen
-                else:
-                    imagen_url = WEBSITE_URL + '/' + imagen
-                
-                productos_encontrados.append({
-                    'id': int(prod_id),
-                    'nombre': nombre.strip(),
-                    'precio': int(precio),
-                    'imagen_url': imagen_url,
-                    'categoria': categoria.strip(),
-                    'descripcion': descripcion.strip()
-                })
-            
-            if productos_encontrados:
-                productos_cache = productos_encontrados
-                ultima_actualizacion = datetime.now()
-                print(f"{len(productos_cache)} productos cargados correctamente")
-                
-                categorias = {}
-                for p in productos_cache:
-                    cat = p['categoria']
-                    categorias[cat] = categorias.get(cat, 0) + 1
-                
-                print("Productos por categoria:")
-                for cat, count in categorias.items():
-                    print(f"   {cat}: {count}")
-            else:
-                print("No se encontraron productos con el patron regex")
-                print("Muestra del codigo JavaScript encontrado:")
-                print(productos_js[:500])
-        else:
-            print("No se encontro el objeto products en la pagina")
-            if 'products' in response.text:
-                print("La palabra products existe pero no coincide con los patrones")
-                idx = response.text.find('products')
-                print(f"Contexto: {response.text[max(0, idx-100):idx+200]}")
-            else:
-                print("La palabra products no existe en el HTML")
-            
+        # Keep backward-compatible scraping attempts if needed
+        # (existing code had a regex path which may still be useful)
+        try:
+            # This is a no-op unless you have additional parsing to add
+            pass
+        except Exception:
+            pass
+        
     except Exception as e:
         print(f"Error en scraping: {e}")
         import traceback
         traceback.print_exc()
-
-
-def crear_imagen_producto(prod):
-    # Canvas 1080x1080 para Instagram
-    canvas = Image.new("RGB", (1080, 1080), "#ffffff")
-    draw = ImageDraw.Draw(canvas)
-    
-    # Paleta de colores vibrantes moderna
-    colores_fondo = [
-        [(255, 93, 177), (155, 81, 224)],  # Rosa a Morado
-        [(67, 233, 123), (56, 249, 215)],  # Verde a Cyan
-        [(251, 200, 212), (151, 149, 240)], # Rosa claro a Morado claro
-        [(255, 159, 64), (255, 99, 132)],  # Naranja a Rosa
-        [(54, 209, 220), (91, 134, 229)]   # Cyan a Azul
-    ]
-    
-    # Seleccionar degradado basado en categoría
-    color_idx = hash(prod['categoria']) % len(colores_fondo)
-    color1, color2 = colores_fondo[color_idx]
-    
-    # Crear degradado diagonal vibrante
-    for y in range(1080):
-        ratio = y / 1080
-        r = int(color1[0] * (1 - ratio) + color2[0] * ratio)
-        g = int(color1[1] * (1 - ratio) + color2[1] * ratio)
-        b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
-        draw.rectangle([(0, y), (1080, y+1)], fill=(r, g, b))
-    
-    # Overlay semi-transparente para suavizar
-    overlay = Image.new("RGBA", (1080, 1080), (255, 255, 255, 30))
-    canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
-    draw = ImageDraw.Draw(canvas)
-    
-    # Badge "OFERTA ESPECIAL" o "NUEVO" en esquina superior
-    badge_text = "OFERTA ESPECIAL"
-    try:
-        font_badge = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32)
-        font_logo = ImageFont.truetype("/System/Library/Fonts/Helvetica-Bold.ttc", 65)
-        font_nombre = ImageFont.truetype("/System/Library/Fonts/Helvetica-Bold.ttc", 42)
-        font_precio_grande = ImageFont.truetype("/System/Library/Fonts/Helvetica-Bold.ttc", 95)
-        font_precio_label = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 35)
-        font_cta = ImageFont.truetype("/System/Library/Fonts/Helvetica-Bold.ttc", 38)
-    except:
-        try:
-            font_badge = ImageFont.truetype("arial.ttf", 32)
-            font_logo = ImageFont.truetype("arialbd.ttf", 65)
-            font_nombre = ImageFont.truetype("arialbd.ttf", 42)
-            font_precio_grande = ImageFont.truetype("arialbd.ttf", 95)
-            font_precio_label = ImageFont.truetype("arial.ttf", 35)
-            font_cta = ImageFont.truetype("arialbd.ttf", 38)
-        except:
-            font_badge = ImageFont.load_default()
-            font_logo = ImageFont.load_default()
-            font_nombre = ImageFont.load_default()
-            font_precio_grande = ImageFont.load_default()
-            font_precio_label = ImageFont.load_default()
-            font_cta = ImageFont.load_default()
-    
-    # Badge rotado en esquina
-    draw.polygon([(0, 0), (280, 0), (0, 280)], fill=(255, 215, 0))
-    draw.polygon([(0, 0), (260, 0), (0, 260)], fill=(255, 193, 7))
-    
-    # Texto del badge (rotado 45 grados visualmente con posición)
-    draw.text((70, 35), "OFERTA", font=font_badge, fill=(139, 0, 0), anchor="mm")
-    
-    # Logo NEXUS HCR en la parte superior
-    draw.text((540, 80), "NEXUS HCR", font=font_logo, fill="white", anchor="mm", 
-              stroke_width=3, stroke_fill=(0, 0, 0))
-    
-    # Contenedor blanco con sombra para el producto
-    shadow_offset = 15
-    draw.rounded_rectangle(
-        [(140 + shadow_offset, 180 + shadow_offset), (940 + shadow_offset, 680 + shadow_offset)],
-        radius=30,
-        fill=(0, 0, 0, 50)
-    )
-    
-    draw.rounded_rectangle(
-        [(140, 180), (940, 680)],
-        radius=30,
-        fill="white"
-    )
-    
-    # Descargar y pegar imagen del producto
-    try:
-        response = requests.get(prod["imagen_url"], timeout=15)
-        img_producto = Image.open(BytesIO(response.content)).convert("RGBA")
-        img_producto.thumbnail((650, 450), Image.Resampling.LANCZOS)
-        
-        offset_x = 540 - img_producto.width // 2
-        offset_y = 430 - img_producto.height // 2
-        
-        canvas_rgba = canvas.convert("RGBA")
-        canvas_rgba.paste(img_producto, (offset_x, offset_y), img_producto if img_producto.mode == 'RGBA' else None)
-        canvas = canvas_rgba.convert("RGB")
-        draw = ImageDraw.Draw(canvas)
-        
-    except Exception as e:
-        print(f"Error cargando imagen: {e}")
-        draw.text((540, 430), "🖼️", font=font_logo, fill="#cccccc", anchor="mm")
-    
-    # Sección inferior con información
-    draw.rounded_rectangle(
-        [(40, 720), (1040, 1040)],
-        radius=25,
-        fill=(255, 255, 255, 250)
-    )
-    
-    # Nombre del producto con wrap si es muy largo
-    nombre = prod['nombre']
-    if len(nombre) > 40:
-        palabras = nombre.split()
-        linea1 = ""
-        linea2 = ""
-        for palabra in palabras:
-            if len(linea1 + palabra) < 35:
-                linea1 += palabra + " "
-            else:
-                linea2 += palabra + " "
-        draw.text((540, 760), linea1.strip(), font=font_nombre, fill=(30, 30, 30), anchor="mm")
-        draw.text((540, 810), linea2.strip(), font=font_nombre, fill=(30, 30, 30), anchor="mm")
-    else:
-        draw.text((540, 780), nombre, font=font_nombre, fill=(30, 30, 30), anchor="mm")
-    
-    # Precio destacado con círculo de fondo
-    precio_y = 870 if len(nombre) > 40 else 850
-    draw.ellipse([(340, precio_y - 60), (740, precio_y + 60)], fill=(255, 193, 7))
-    draw.ellipse([(350, precio_y - 50), (730, precio_y + 50)], fill=(255, 215, 0))
-    
-    draw.text((540, precio_y - 25), "SOLO", font=font_precio_label, fill=(139, 0, 0), anchor="mm")
-    precio_text = f"₡{prod['precio']:,}"
-    draw.text((540, precio_y + 20), precio_text, font=font_precio_grande, fill=(139, 0, 0), anchor="mm")
-    
-    # Call to action en la parte inferior
-    cta_y = 980
-    draw.text((540, cta_y), "¡COMPRA AHORA!", font=font_cta, fill=(255, 0, 80), anchor="mm",
-              stroke_width=2, stroke_fill="white")
-    
-    # Categoría badge pequeño
-    cat_badge_width = 180
-    draw.rounded_rectangle(
-        [(540 - cat_badge_width//2, 1020), (540 + cat_badge_width//2, 1060)],
-        radius=20,
-        fill=(100, 100, 100)
-    )
-    draw.text((540, 1040), prod['categoria'].upper(), font=font_badge, fill="white", anchor="mm")
-    
-    return canvas
 
 
 async def publicar_producto_aleatorio(context: ContextTypes.DEFAULT_TYPE):
